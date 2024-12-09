@@ -18,7 +18,7 @@ def get_image_file_as_base64(file_path):
 st.set_page_config(layout="wide")
 
 # Correct absolute path to your GIF image
-gif_path = "images\Sales report.gif"
+gif_path = "data\Sales report.gif"
 
 # Display GIF on the first row
 try:
@@ -380,7 +380,7 @@ if uploaded_files:
     col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
     with col1:
-        image_path = "images\sales2.png"
+        image_path = "data\sales2.png"
         try:
             image = Image.open(image_path)
             st.image(image, caption=None, use_container_width=True)
@@ -497,7 +497,7 @@ if uploaded_files:
     col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
     with col1:
-        image_path = r"images\year.png"
+        image_path = r"data\year.png"
         try:
             image = Image.open(image_path)
             st.image(image, caption=None, use_container_width=True)
@@ -630,7 +630,7 @@ if uploaded_files:
         col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
         with col1:
-            image_path = r"images\warehouse.png"
+            image_path = r"data\warehouse.png"
             try:
                 image = Image.open(image_path)
                 st.image(image, caption=None, use_container_width=True)
@@ -749,7 +749,7 @@ if uploaded_files:
         col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
         with col1:
-            image_path = r"images\interest-rate.png"
+            image_path = r"data\interest-rate.png"
             try:
                 image = Image.open(image_path)
                 st.image(image, caption=None, use_container_width=True)
@@ -887,7 +887,7 @@ if uploaded_files:
             col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
             with col1:
-                image_path = r"images\margin.png"
+                image_path = r"data\margin.png"
                 try:
                     image = Image.open(image_path)
                     st.image(image, caption=None, use_container_width=True)
@@ -1155,7 +1155,7 @@ if uploaded_files:
         col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
         with col1:
-            image_path = r"images\forecasting.png"
+            image_path = r"data\forecasting.png"
             try:
                 image = Image.open(image_path)
                 st.image(image, caption=None, use_container_width=True)
@@ -1641,7 +1641,7 @@ if uploaded_files:
         col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
         with col1:
-            image_path = r"images\contribution.png"
+            image_path = r"data\contribution.png"
             try:
                 image = Image.open(image_path)
                 st.image(image, caption=None, use_container_width=True)
@@ -1869,7 +1869,7 @@ if uploaded_files:
         col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
         with col1:
-            image_path = r"images\key.png"
+            image_path = r"data\key.png"
             try:
                 image = Image.open(image_path)
                 st.image(image, caption=None, use_container_width=True)
