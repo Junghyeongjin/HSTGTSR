@@ -380,7 +380,7 @@ if uploaded_files:
     col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
     with col1:
-        image_path = "data\sales2.png"
+        image_path = "https://raw.githubusercontent.com/Junghyeongjin/HSTGTSR/main/data/sales2.png"
         try:
             image = Image.open(image_path)
             st.image(image, caption=None, use_container_width=True)
