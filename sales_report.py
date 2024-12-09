@@ -8,6 +8,38 @@ import base64
 import numpy as np
 import io
 
+@st.cache_data
+def load_images():
+    """Load and cache all images."""
+    images = {
+        "sales_report": "images/Sales report.gif",
+        "sales2": "images/sales2.png",
+        "year": "images/year.png",
+        "warehouse": "images/warehouse.png",
+        "interest_rate": "images/interest-rate.png",
+        "margin": "images/margin.png",
+        "contribution": "images/contribution.png",
+        "forecasting": "images/forecasting.png",
+        "key": "images/key.png",
+    }
+
+    # Load images into a dictionary
+    cached_images = {}
+    for name, path in images.items():
+        try:
+            # Check file extension and process accordingly
+            if path.endswith(".gif"):
+                # Convert GIF to Base64 for embedding in HTML
+                with open(path, "rb") as gif_file:
+                    cached_images[name] = base64.b64encode(gif_file.read()).decode("utf-8")
+            else:
+                # Load PNG/JPG files as PIL Image
+                cached_images[name] = Image.open(path)
+        except FileNotFoundError:
+            st.error(f"Image {name} not found at {path}. Please check the path.")
+    
+    return cached_images
+
 
 # Function to convert the GIF file into Base64 format
 def get_image_file_as_base64(file_path):
@@ -18,12 +50,14 @@ def get_image_file_as_base64(file_path):
 # Set the page layout to wide
 st.set_page_config(layout="wide")
 
+images = load_images()
+
 # Correct absolute path to your GIF image
-gif_path = r"images\Sales report.gif"
+gif_base64 = images.get("sales_report")
 
 # Display GIF on the first row
 try:
-    gif_base64 = get_image_file_as_base64(gif_path)
+    gif_base64 = get_image_file_as_base64(gif_base64)
     gif_html = f"""
     <div style="text-align: center; margin-bottom: 20px;">
         <img src="data:image/gif;base64,{gif_base64}" 
@@ -381,9 +415,9 @@ if uploaded_files:
     col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
     with col1:
-        image_path = r"images\sales2.png"
+        image = images.get("sales2")
         try:
-            image = Image.open(image_path)
+            image = Image.open(image)
             st.image(image, caption=None, use_container_width=True)
         except FileNotFoundError:
             st.error("Image not found. Please check the path.")
