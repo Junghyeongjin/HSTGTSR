@@ -21,9 +21,11 @@ packaging==24.2
 pandas==2.2.3
 pillow==11.0.0
 plotly==5.24.1
+prettytable==3.12.0
 protobuf==5.29.1
 pyarrow==18.1.0
 pydeck==0.9.1
+pyecharts==2.0.7
 Pygments==2.18.0
 python-dateutil==2.9.0.post0
 pytz==2024.2
@@ -31,9 +33,11 @@ referencing==0.35.1
 requests==2.32.3
 rich==13.9.4
 rpds-py==0.22.3
+simplejson==3.19.3
 six==1.17.0
 smmap==5.0.1
 streamlit==1.40.2
+streamlit-echarts==0.4.0
 tenacity==9.0.0
 toml==0.10.2
 tornado==6.4.2
@@ -41,4 +45,5 @@ typing_extensions==4.12.2
 tzdata==2024.2
 urllib3==2.2.3
 watchdog==6.0.0
+wcwidth==0.2.13
 XlsxWriter==3.2.0
