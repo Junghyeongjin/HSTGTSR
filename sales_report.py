@@ -20,7 +20,7 @@ def get_image_file_as_base64(file_path):
 st.set_page_config(layout="wide")
 
 # Correct absolute path to your GIF image
-gif_path = "static/Sales report.gif"
+gif_path = "static/Sales_report.gif"
 
 # Display GIF on the first row
 try:
