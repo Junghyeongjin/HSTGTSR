@@ -488,6 +488,7 @@ if uploaded_files:
 
     # Data Table in Column 1
     with col1:
+        st.markdown("<br><br>", unsafe_allow_html=True)
         st.write("Monthly Sales Units(filtered) - Top 10")
         st.dataframe(
             monthly_data.style.format({
@@ -672,7 +673,7 @@ if uploaded_files:
                 return ['background-color: #f5f5f5; color: black' for _ in row]
             return ['' for _ in row]
 
-    col1, col2 = st.columns([7, 3])  # Data Table (7) and Doughnut Chart (3)
+    col1, col2, col3 = st.columns([6, 3, 1])  # Data Table (7) and Doughnut Chart (3)
 
     # Data Table in Column 1
     with col1:
@@ -867,6 +868,7 @@ if uploaded_files:
         col1, col2, col3 = st.columns([6, 3, 1])  # Adjust column widths for data table and horizontal bar chart
 
         with col1:
+            st.markdown("<br><br>", unsafe_allow_html=True)
             st.write("Monthly EOH+OT Units(filtered) - Top 10")
             st.dataframe(
                 monthly_data.style.format({
@@ -1803,23 +1805,27 @@ if uploaded_files:
                 else:
                     styles.append("")
             return styles
-
-        # Display the table with styling applied row-wise
-        st.write("Weekly Sales and Inventory Forecast Table")
-        st.dataframe(
-            forecast_table_df.style.apply(style_table, axis=1).format("{:,.0f}", subset=["Sales (Units)", "EOH+OT U (Units)", "Balance (EOH+OT - Sales)"])
-        )
-        #====================================================================================================
-        # Combine main explanation with depletion week and negative stock week info in one styled markdown
-        st.markdown(
-            f"<span style='font-size:18px; font-weight:bold;'>Inventory Depletion Point:</span> "
-            "<span style='font-size:18px;'>Displaying the point at which the forecasted Sales line intersects with the forecasted EOH+OT U line, indicating the expected timing of inventory exhaustion.</span><br>"
-            f"{depletion_week_text}<br><br>"
-            f"<span style='font-size:18px; font-weight:bold;'>Negative Stock Point:</span> "
-            "<span style='font-size:18px;'>Displaying the first point at which forecasted EOH+OT U turns negative, indicating potential stock shortages.</span><br>"
-            f"{negative_stock_week_text}",
-            unsafe_allow_html=True
-        )
+            
+        col1, col2, col3 = st.columns([2, 2, 1])
+        with col1: 
+            # Display the table with styling applied row-wise
+            st.write("Weekly Sales and Inventory Forecast Table")
+            st.dataframe(
+                forecast_table_df.style.apply(style_table, axis=1).format("{:,.0f}", subset=["Sales (Units)", "EOH+OT U (Units)", "Balance (EOH+OT - Sales)"])
+            )
+            #====================================================================================================
+            # Combine main explanation with depletion week and negative stock week info in one styled markdown
+        with col2:
+            st.markdown("<br><br>", unsafe_allow_html=True)    
+            st.markdown(
+                f"<span style='font-size:18px; font-weight:bold;'>Inventory Depletion Point:</span> "
+                "<span style='font-size:18px;'>Displaying the point at which the forecasted Sales line intersects with the forecasted EOH+OT U line, indicating the expected timing of inventory exhaustion.</span><br>"
+                f"{depletion_week_text}<br><br>"
+                f"<span style='font-size:18px; font-weight:bold;'>Negative Stock Point:</span> "
+                "<span style='font-size:18px;'>Displaying the first point at which forecasted EOH+OT U turns negative, indicating potential stock shortages.</span><br>"
+                f"{negative_stock_week_text}",
+                unsafe_allow_html=True
+            )
         st.divider()
 
         #====================================Contribution Calculation====================================
