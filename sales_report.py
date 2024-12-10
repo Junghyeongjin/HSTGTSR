@@ -296,8 +296,6 @@ if uploaded_files:
 
         This application was developed using Streamlit instead of Power BI to offer a more dynamic and interactive approach to analyzing sales data. With customized formulas, it is tailored to address our specific needs.  
 
-        *As a vendor, we don’t “pricing” our products the way most companies do. Instead, we approach it as “costing” to align with the buyer’s perspective. Let’s work together to make our buyer’s overhead cost valuable.*    
-
         If this app contributes to simplifying your work or even once supports Hansae’s sales success, I would consider it a meaningful achievement.  
 
         **Please feel free to share any ideas or suggestions for improvement. Together, we can make this tool even better!**  
