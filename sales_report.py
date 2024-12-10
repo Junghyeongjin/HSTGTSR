@@ -6,7 +6,9 @@ from datetime import timedelta
 from PIL import Image
 import base64
 import numpy as np
+from streamlit_echarts import st_echarts
 import io
+
 
 # Function to convert the GIF file into Base64 format
 def get_image_file_as_base64(file_path):
@@ -18,7 +20,7 @@ def get_image_file_as_base64(file_path):
 st.set_page_config(layout="wide")
 
 # Correct absolute path to your GIF image
-gif_path = "static/Sales_report.gif"
+gif_path = "static\Sales report.gif"
 
 # Display GIF on the first row
 try:
@@ -296,6 +298,8 @@ if uploaded_files:
 
         This application was developed using Streamlit instead of Power BI to offer a more dynamic and interactive approach to analyzing sales data. With customized formulas, it is tailored to address our specific needs.  
 
+        *As a vendor, we don’t “pricing” our products the way most companies do. Instead, we approach it as “costing” to align with the buyer’s perspective. Let’s work together to make our buyer’s overhead cost valuable.*    
+
         If this app contributes to simplifying your work or even once supports Hansae’s sales success, I would consider it a meaningful achievement.  
 
         **Please feel free to share any ideas or suggestions for improvement. Together, we can make this tool even better!**  
@@ -378,7 +382,7 @@ if uploaded_files:
     col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
     with col1:
-        image_path = "static/sales2.png"
+        image_path = "static\sales2.png"
         try:
             image = Image.open(image_path)
             st.image(image, caption=None, use_container_width=True)
@@ -480,14 +484,68 @@ if uploaded_files:
     def highlight_total_sum(row):
         return ['font-weight: bold' if row.name == 'Total Sum' else '' for _ in row]
 
-    # Display Datatable under Graph #1 with formatting
-    st.write("Monthly Sales Units(filtered) - Top 10")
-    st.dataframe(
-        monthly_data.style.format({
-            **{col: "{:,.0f}" for col in monthly_data.columns if col not in ["% (portion)"]},  # Format integers with commas
-            "% (portion)": "{:.2%}"
-        }).apply(highlight_total_sum, axis=1)
-    )
+    col1, col2, col3 = st.columns([6, 3, 1])  # Data Table (7) and Bar Chart (3)
+
+    # Data Table in Column 1
+    with col1:
+        st.write("Monthly Sales Units(filtered) - Top 10")
+        st.dataframe(
+            monthly_data.style.format({
+                **{col: "{:,.0f}" for col in monthly_data.columns if col not in ["% (portion)"]},
+                "% (portion)": "{:.2%}"
+            }).apply(highlight_total_sum, axis=1)
+        )
+
+    # Bar Chart in Column 2
+    with col2:
+        # Exclude "Total Sum" row from the chart data
+        chart_data = monthly_data.loc[monthly_data.index != 'Total Sum'].reset_index()  # Reset index for plotting
+
+        # Use the correct column for categories (adjust based on your actual data structure)
+        categories = chart_data.iloc[:, 0]  # First column after reset_index() is the category (e.g., product lines)
+        values = chart_data['Total']  # Total sales for each category
+        percentages = chart_data['% (portion)'].apply(lambda x: f"{x:.2%}")  # Format percentages
+
+        # Sort the data for better visualization
+        sorted_chart_data = chart_data.sort_values(by='Total', ascending=True)
+
+        # Horizontal bar chart with Plotly
+        fig_bar = go.Figure()
+
+        # Add bar for sales values
+        fig_bar.add_trace(
+            go.Bar(
+                y=sorted_chart_data.iloc[:, 0],  # Sorted categories (first column)
+                x=sorted_chart_data['Total'],  # Corresponding sales values
+                orientation='h',  # Horizontal bars
+                name='Sales Portion',
+                marker=dict(color='lightskyblue'),
+                text=sorted_chart_data['% (portion)'].apply(lambda x: f"{x:.2%}"),  # Add percentages as text
+                textposition='outside',  # Position text outside the bars
+                textfont=dict(size=12)  # Font size for better readability
+            )
+        )
+
+        # Customize the layout
+        fig_bar.update_layout(
+            title='Sales Portion of Top categories',
+            xaxis=dict(title='Sales Units', showgrid=False),
+            yaxis=dict(title='Categories', categoryorder='array', categoryarray=sorted_chart_data.iloc[:, 0]),
+            barmode='stack',  # Single bar per category
+            height=600,
+            legend=dict(
+                title="Legend",
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1,
+                traceorder="reversed"  # Ensures consistent legend ordering
+            )
+        )
+
+        # Display the chart
+        st.plotly_chart(fig_bar, use_container_width=True)
     st.divider()
 
     #======== GRAPH#1-1
@@ -495,7 +553,7 @@ if uploaded_files:
     col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
     with col1:
-        image_path = "static/year.png"
+        image_path = "static\year.png"
         try:
             image = Image.open(image_path)
             st.image(image, caption=None, use_container_width=True)
@@ -614,12 +672,86 @@ if uploaded_files:
                 return ['background-color: #f5f5f5; color: black' for _ in row]
             return ['' for _ in row]
 
-        # Display the styled and formatted data table
+    col1, col2 = st.columns([7, 3])  # Data Table (7) and Doughnut Chart (3)
+
+    # Data Table in Column 1
+    with col1:
         st.write("Multi-Year Sales Units(filtered) with Yearly Changes")
         st.dataframe(
             pd.DataFrame(formatted_multi_year_table, index=multi_year_table.index, columns=multi_year_table.columns)
             .style.apply(highlight_rows, axis=1)
         )
+
+    # Doughnut Chart in Column 2
+    with col2:
+        # Prepare data for the Doughnut Chart
+        doughnut_data = multi_year_table.copy()
+
+        # Exclude rows that are not actual years (e.g., "Total Sum" or rows with "Change %")
+        doughnut_data = doughnut_data.loc[~doughnut_data.index.str.contains("Change|Total", case=False, na=False)]
+
+        # Exclude the "Total" column to avoid double-counting
+        if 'Total' in doughnut_data.columns:
+            doughnut_data = doughnut_data.drop(columns=['Total'])
+
+        # Calculate the total sales across all years
+        doughnut_data['Yearly_Total'] = doughnut_data.sum(axis=1)  # Sum of sales for each year
+        grand_total = doughnut_data['Yearly_Total'].sum()  # Total sales across all years
+
+        # Convert data into a format compatible with ECharts
+        doughnut_chart_data = [
+            {"value": total, "name": str(index)} for index, total in doughnut_data['Yearly_Total'].items()
+        ]
+
+        # Define ECharts options for the Doughnut Chart
+        doughnut_chart_options = {
+            "title": {
+                "text": "Sales Units",
+                "subtext": "Sum of All Years: 100%",
+                "left": "center"
+            },
+            "tooltip": {
+                "trigger": "item",
+                "formatter": "{a} <br/>{b}: {c} units ({d}%)"
+            },
+            "legend": {
+                "orient": "vertical",
+                "left": "left",
+                "data": [str(index) for index in doughnut_data.index]  # Only actual years
+            },
+            "series": [
+                {
+                    "name": "Sales Units",
+                    "type": "pie",
+                    "radius": ["40%", "70%"],  # Inner and outer radii for the doughnut effect
+                    "avoidLabelOverlap": False,
+                    "itemStyle": {
+                        "borderRadius": 10,
+                        "borderColor": "#fff",
+                        "borderWidth": 2
+                    },
+                    "label": {
+                        "show": True,
+                        "position": "inside",
+                        "formatter": "{b}: {d}%"  # Show name and percentage only
+                    },
+                    "emphasis": {
+                        "label": {
+                            "show": True,
+                            "fontSize": "16",
+                            "fontWeight": "bold"
+                        }
+                    },
+                    "labelLine": {
+                        "show": True
+                    },
+                    "data": doughnut_chart_data
+                }
+            ]
+        }
+
+        # Render ECharts Doughnut Chart
+        st_echarts(options=doughnut_chart_options, height="500px")
 
     st.divider()
 
@@ -628,7 +760,7 @@ if uploaded_files:
         col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
         with col1:
-            image_path = "static/warehouse.png"
+            image_path = "static\warehouse.png"
             try:
                 image = Image.open(image_path)
                 st.image(image, caption=None, use_container_width=True)
@@ -731,15 +863,71 @@ if uploaded_files:
         def highlight_total_sum(row):
             return ['font-weight: bold' if row.name == 'Total Sum' else '' for _ in row]
 
-        # Display Datatable under Graph #2 with formatting
-        st.write("Monthly EOH+OT Units(filtered) - Top 10")
-        st.dataframe(
-            monthly_data.style.format({
-                **{col: "{:,.0f}" for col in monthly_data.columns if col not in ["% (portion)"]},  # Format integers with commas
-                "% (portion)": "{:.2%}"
-            }).apply(highlight_total_sum, axis=1)
-        )
+        # Data Table in Column 1
+        col1, col2, col3 = st.columns([6, 3, 1])  # Adjust column widths for data table and horizontal bar chart
 
+        with col1:
+            st.write("Monthly EOH+OT Units(filtered) - Top 10")
+            st.dataframe(
+                monthly_data.style.format({
+                    **{col: "{:,.0f}" for col in monthly_data.columns if col not in ["% (portion)"]},  # Format integers with commas
+                    "% (portion)": "{:.2%}"
+                }).apply(highlight_total_sum, axis=1)
+            )
+
+        # Horizontal Bar Chart in Column 2
+        with col2:
+            # Prepare data for the horizontal bar chart
+            bar_chart_data = monthly_data.reset_index()
+            bar_chart_data = bar_chart_data[bar_chart_data.index < len(monthly_data) - 1]  # Exclude "Total Sum"
+            bar_chart_data = bar_chart_data.sort_values(by='Total', ascending=True)
+
+            # Horizontal bar chart with Plotly for EOH+OT Units
+            fig_bar = go.Figure()
+
+            # Prepare sorted data excluding the "Total Sum" row
+            sorted_chart_data = monthly_data.reset_index()
+            sorted_chart_data = sorted_chart_data[sorted_chart_data.index < len(sorted_chart_data) - 1]  # Exclude "Total Sum"
+            sorted_chart_data = sorted_chart_data.sort_values(by='Total', ascending=True)  # Sort by 'Total'
+
+            # Add bar for EOH+OT values
+            fig_bar.add_trace(
+                go.Bar(
+                    y=sorted_chart_data.iloc[:, 0],  # Categories (first column from reset index)
+                    x=sorted_chart_data['Total'],  # Total EOH+OT Units
+                    orientation='h',  # Horizontal bars
+                    name='EOH+OT Portion',
+                    marker=dict(color='lightskyblue'),  # Light blue bar color
+                    text=sorted_chart_data['% (portion)'].apply(lambda x: f"{x:.2%}"),  # Add percentages as text
+                    textposition='outside',  # Position text outside the bars
+                    textfont=dict(size=12)  # Font size for better readability
+                )
+            )
+
+            # Customize the layout
+            fig_bar.update_layout(
+                title='EOH+OT Units Portion of Top Categories',
+                xaxis=dict(title='EOH+OT Units', showgrid=False),
+                yaxis=dict(
+                    title='Categories',
+                    categoryorder='array',
+                    categoryarray=sorted_chart_data.iloc[:, 0]  # Order categories based on the sorted data
+                ),
+                barmode='stack',  # Single bar per category
+                height=600,
+                legend=dict(
+                    title="Legend",
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1,
+                    traceorder="reversed"  # Ensures consistent legend ordering
+                )
+            )
+
+            # Display the chart
+            st.plotly_chart(fig_bar, use_container_width=True)
         st.divider()
 
 
@@ -747,7 +935,7 @@ if uploaded_files:
         col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
         with col1:
-            image_path = "static/interest-rate.png"
+            image_path = "static\interest-rate.png"
             try:
                 image = Image.open(image_path)
                 st.image(image, caption=None, use_container_width=True)
@@ -872,20 +1060,101 @@ if uploaded_files:
         def highlight_total_sum(col):
             return ['font-weight: bold; background-color: #f5f5f5; color: black;' if col.name == 'Total Sum' else '' for _ in col]
 
-        # Display the Data Table
-        st.write("Monthly Data Table for Sales % (Compared to EOH+OT Units)")
-        st.dataframe(
-            pivoted_data.style.apply(highlight_total_sum, axis=1)
-        )
+        col1, col2, col3 = st.columns([6, 3, 1])  # 7:3 column split
+
+        with col1:
+            # Display the Data Table
+            st.write("Monthly Data Table for Sales % (Compared to EOH+OT Units)")
+            st.dataframe(
+                pivoted_data.style.apply(highlight_total_sum, axis=1)
+            )
+
+        with col2:
+            # Combine data from Graph #1 and Graph #2 to calculate Sales % for Top 10 Categories
+
+            # Graph #1 Data: Sales Units
+            sales_data = (
+                grouped_data_with_groups.groupby(group_columns[0])['SUM_SELECTED']
+                .sum()
+                .reset_index()
+                .rename(columns={'SUM_SELECTED': 'Sales_Units'})
+            )
+
+            # Graph #2 Data: EOH+OT Units
+            eoh_ot_data = (
+                grouped_data_with_groups.groupby(group_columns[0])['EOH+OT U']
+                .sum()
+                .reset_index()
+                .rename(columns={'EOH+OT U': 'EOH_OT_Units'})
+            )
+
+            # Merge sales data and EOH+OT data on the category column
+            merged_data = pd.merge(sales_data, eoh_ot_data, on=group_columns[0], how='left')
+
+            # Calculate Total Units and Sales %
+            merged_data['Total_Units'] = merged_data['Sales_Units'] + merged_data['EOH_OT_Units']
+            merged_data['Sales_Percent'] = (merged_data['Sales_Units'] / merged_data['Total_Units']) * 100
+
+            # Sort by Sales Units to follow the sort order of Graph #1
+            top_categories_data = merged_data.sort_values(by='Sales_Units', ascending=False).head(10)
+
+            # Ensure the categories in the bar chart are ordered based on Sales Units (Graph #1 order)
+            category_order = top_categories_data[group_columns[0]].tolist()
+
+            # Reverse the category order for the horizontal bar chart (to display from highest to lowest)
+            category_order.reverse()
+
+            # Horizontal bar chart for Sales %
+            fig_sales_percent = go.Figure()
+
+            fig_sales_percent.add_trace(
+                go.Bar(
+                    y=top_categories_data[group_columns[0]],  # Categories
+                    x=top_categories_data['Sales_Percent'],  # Sales %
+                    orientation='h',
+                    name='Sales %',
+                    marker=dict(color='lightskyblue'),
+                    text=top_categories_data['Sales_Percent'].apply(lambda x: f"{x:.2f}%"),
+                    textposition='outside',
+                    textfont=dict(size=12)
+                )
+            )
+
+            # Customize layout
+            fig_sales_percent.update_layout(
+                title='Sales % (Sales compare to EOH+OT) of Top 10 Sales Products',
+                xaxis=dict(title='Sales %', showgrid=False),
+                yaxis=dict(
+                    title='Categories',
+                    categoryorder='array',  # Use the custom order from Graph #1
+                    categoryarray=category_order  # Reversed category order
+                ),
+                height=600,
+                legend=dict(
+                    title="Legend",
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1,
+                    traceorder="reversed"
+                )
+            )
+
+            # Display the chart
+            st.plotly_chart(fig_sales_percent, use_container_width=True)
+
 
         st.divider()
+
+
         #====================Gross Margin part====================
         # Section: Gross Margin Introduction
         if "REG SALES $" in grouped_data.columns and "PROMO SALES $" in grouped_data.columns and "CLEAR SALES $" in grouped_data.columns:
             col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
             with col1:
-                image_path = "static/margin.png"
+                image_path = "static\margin.png"
                 try:
                     image = Image.open(image_path)
                     st.image(image, caption=None, use_container_width=True)
@@ -1153,7 +1422,7 @@ if uploaded_files:
         col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
         with col1:
-            image_path = "static/forecasting.png"
+            image_path = "static\forecasting.png"
             try:
                 image = Image.open(image_path)
                 st.image(image, caption=None, use_container_width=True)
@@ -1639,7 +1908,7 @@ if uploaded_files:
         col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
         with col1:
-            image_path = "static/contribution.png"
+            image_path = "static\contribution.png"
             try:
                 image = Image.open(image_path)
                 st.image(image, caption=None, use_container_width=True)
@@ -1853,13 +2122,77 @@ if uploaded_files:
             lambda x: f"{x:.1f}%" if pd.notnull(x) else "")
         formatted_table.loc['Clear_Contribution_%'] = formatted_table.loc['Clear_Contribution_%'].apply(
             lambda x: f"{x:.1f}%" if pd.notnull(x) else "")
+        col1, col2 = st.columns([6, 4])  # 7:3 column split
 
-        # Display the formatted table with a smaller heading
-        st.markdown(
-            "<div style='font-size:18px; font-weight:bold;'>Monthly Contribution (filtered)</div>",
-            unsafe_allow_html=True
-        )
-        st.dataframe(formatted_table)
+        with col1:
+            # Display the formatted table with a smaller heading
+            st.markdown(
+                "<div style='font-size:18px; font-weight:bold;'>Monthly Contribution (filtered)</div>",
+                unsafe_allow_html=True
+            )
+            st.dataframe(formatted_table)
+        with col2:
+            # Calculate the total contribution for the doughnut chart
+            contribution_totals = {
+                "Regular $": monthly_summary['Reg_Sales_Value'].sum(),
+                "Promo $": monthly_summary['Promo_Sales_Value'].sum(),
+                "Clear $": monthly_summary['Clear_Sales_Value'].sum()
+            }
+
+            # Prepare data for the Echarts doughnut chart
+            doughnut_chart_data = [
+                {"value": contribution_totals["Regular $"], "name": "Regular $"},
+                {"value": contribution_totals["Promo $"], "name": "Promo $"},
+                {"value": contribution_totals["Clear $"], "name": "Clear $"}
+            ]
+
+            # Define Echarts options for the doughnut chart
+            doughnut_chart_options = {
+                "title": {
+                    "left": "center"
+                },
+                "tooltip": {
+                    "trigger": "item",
+                    "formatter": "{a} <br/>{b}: ${c:,.0f} ({d}%)"
+                },
+                "legend": {
+                    "orient": "vertical",
+                    "right": "5%",  # Move legends to the right side
+                    "top": "center",  # Vertically center the legends
+                    "data": ["Regular $", "Promo $", "Clear $"]
+                },
+                "series": [
+                    {
+                        "name": "Sales Contribution",
+                        "type": "pie",
+                        "radius": ["40%", "70%"],  # Inner and outer radii for doughnut effect
+                        "avoidLabelOverlap": False,
+                        "itemStyle": {
+                            "borderRadius": 10,
+                            "borderColor": "#fff",
+                            "borderWidth": 2
+                        },
+                        "label": {
+                            "show": True,
+                            "formatter": "{b}: {d}%"  # Show name and percentage
+                        },
+                        "emphasis": {
+                            "label": {
+                                "show": True,
+                                "fontSize": "16",
+                                "fontWeight": "bold"
+                            }
+                        },
+                        "data": doughnut_chart_data,
+                        "color": ["#2ecc71", "#3498db", "#e67e22"]  # Match colors from stacked bar graph
+                    }
+                ]
+            }
+
+            # Display the Echarts doughnut chart
+            st.markdown("<div style='font-size:18px; font-weight:bold;'>Sales Contribution Doughnut</div>", unsafe_allow_html=True)
+            st_echarts(options=doughnut_chart_options, height="400px")
+
         st.divider()
 
         #key metrics=======================================================
@@ -1867,7 +2200,7 @@ if uploaded_files:
         col1, col2 = st.columns([1, 8])  # Adjust column width ratio as needed
 
         with col1:
-            image_path = "static/key.png"
+            image_path = "static\key.png"
             try:
                 image = Image.open(image_path)
                 st.image(image, caption=None, use_container_width=True)
