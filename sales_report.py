@@ -46,7 +46,8 @@ st.markdown(
     """, 
     unsafe_allow_html=True
 )
-    
+
+   
 # Password Protection
 password = st.sidebar.text_input("Enter Access Password:", type="password")
 if password != "HansaeCJS!":
@@ -297,8 +298,6 @@ if uploaded_files:
         I created this tool to support all my colleagues in our "3A 본부 😊", helping you uncover valuable insights to strengthen persuasive discussions with our buyers.  
 
         This application was developed using Streamlit instead of Power BI to offer a more dynamic and interactive approach to analyzing sales data. With customized formulas, it is tailored to address our specific needs.  
-
-        *As a vendor, we don’t “pricing” our products the way most companies do. Instead, we approach it as “costing” to align with the buyer’s perspective. Let’s work together to make our buyer’s overhead cost valuable.*    
 
         If this app contributes to simplifying your work or even once supports Hansae’s sales success, I would consider it a meaningful achievement.  
 
@@ -1389,12 +1388,109 @@ if uploaded_files:
                 formatted_summary = pivoted_summary.apply(
                     lambda col: [format_row(value, row_name) for value, row_name in zip(col, pivoted_summary.index)]
                 )
+            col1, col2, col3 = st.columns([6, 3, 1])  # Adjust column width ratio as needed
 
+            # Column 1: Data Table
+            with col1:
                 # Display the final table
                 st.write("Monthly Gross Margin $(filtered)")
                 st.dataframe(formatted_summary)
-            else:
-                st.error("The 'Month' column is missing in the DataFrame.")
+            with col2:
+                # Check and calculate 'Total Sales $' if not already present
+                if "Total Sales $" not in data.columns:
+                    if all(col in data.columns for col in ["REG SALES $", "PROMO SALES $", "CLEAR SALES $"]):
+                        data["Total Sales $"] = data[["REG SALES $", "PROMO SALES $", "CLEAR SALES $"]].sum(axis=1)
+                    else:
+                        st.error("Columns required for 'Total Sales $' calculation are missing.")
+                        st.stop()
+
+                # Group data based on the selected aggregation level
+                aggregated_data = (
+                    data.groupby(group_columns)
+                    .agg(
+                        Gross_Margin_Dollar=('GROSS MARGIN $', 'sum'),
+                        Sales_Amount=('Total Sales $', 'sum')
+                    )
+                    .reset_index()
+                )
+
+                # Calculate Gross Margin % for annotations
+                aggregated_data['Gross_Margin_Percent'] = (
+                    (aggregated_data['Gross_Margin_Dollar'] / aggregated_data['Sales_Amount']) * 100
+                ).round(2)
+
+                # Sort data by Sales Amount and select the top 10
+                top_aggregated_data = aggregated_data.sort_values(by='Sales_Amount', ascending=False).head(10)
+
+                # Reverse the order for horizontal bar chart (highest at the top)
+                top_aggregated_data = top_aggregated_data.iloc[::-1]
+
+                # Horizontal bar chart for Gross Margin $ and Sales Amount $
+                fig_horizontal_bar = go.Figure()
+
+                # Add Gross Margin $ bars
+                fig_horizontal_bar.add_trace(
+                    go.Bar(
+                        y=top_aggregated_data[group_columns[0]],  # Group names
+                        x=top_aggregated_data['Gross_Margin_Dollar'],  # Gross Margin $
+                        orientation='h',
+                        name='Gross Margin $',
+                        marker=dict(color='blue'),
+                        text=top_aggregated_data['Gross_Margin_Dollar'].apply(lambda x: f"${x:,.0f}"),
+                        textposition='auto',
+                        textfont=dict(size=12)
+                    )
+                )
+
+                # Add Sales Amount $ bars
+                fig_horizontal_bar.add_trace(
+                    go.Bar(
+                        y=top_aggregated_data[group_columns[0]],  # Group names
+                        x=top_aggregated_data['Sales_Amount'],  # Sales Amount $
+                        orientation='h',
+                        name='Sales Amount $',
+                        marker=dict(color='orange'),
+                        text=top_aggregated_data['Sales_Amount'].apply(lambda x: f"${x:,.0f}"),
+                        textposition='auto',
+                        textfont=dict(size=12)
+                    )
+                )
+
+                # Add annotations for Gross Margin %
+                for i, row in top_aggregated_data.iterrows():
+                    fig_horizontal_bar.add_annotation(
+                        x=row['Sales_Amount'],  # Place on Gross Margin $ bar
+                        y=row[group_columns[0]],  # Corresponding group
+                        text=f"{row['Gross_Margin_Percent']:.2f}%",  # Gross Margin %
+                        showarrow=False,
+                        font=dict(size=12, color="white"),  # Bigger font with white color
+                        align="center",
+                        bgcolor="black"  # Background color for better visibility
+                    )
+
+                # Customize layout
+                fig_horizontal_bar.update_layout(
+                    title=f"Top 10 products by Sales Amount $",
+                    xaxis=dict(title='Amount ($)', showgrid=False),
+                    yaxis=dict(
+                        title=group_columns[0],
+                        categoryorder='array',  # Reverse order for categories
+                        categoryarray=top_aggregated_data[group_columns[0]].tolist()
+                    ),
+                    height=600,
+                    barmode='group',  # Group bars side by side
+                    legend=dict(
+                        title="Legend",
+                        orientation="h",
+                        yanchor="bottom",
+                        y=1.02,
+                        xanchor="right",
+                        x=1
+                    )
+                )
+
+                # Display the chart
+                st.plotly_chart(fig_horizontal_bar, use_container_width=True)
 
 
         st.divider()
@@ -2233,7 +2329,6 @@ if uploaded_files:
                 padding: 10px;
                 margin-bottom: 10px;
                 border-radius: 8px;
-                background-color: #f5faff;
                 border: 1px solid #1E90FF;
             }
             .metric-label {
@@ -2245,7 +2340,7 @@ if uploaded_files:
             .metric-value {
                 font-size: 1.4em;
                 font-weight: bold;
-                color: #104E8B;
+                color: #000000;
             }
             .metric-arrow {
                 margin-left: 5px;
@@ -2375,9 +2470,27 @@ if uploaded_files:
                 <span class="metric-value">${metrics['average_sales_value_4w']:,.2f}</span>
             </div>
         """, unsafe_allow_html=True)
-
+#Gradation
     with row3_col2:
         st.markdown(f"""
+            <style>
+            .metric-container {{
+                background: linear-gradient(135deg, #E6F2FF 0%, #FFFFFF 100%);
+                padding: 15px;
+                border-radius: 10px;
+                box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+                color: #000;  /* Black text for contrast */
+                font-family: Arial, sans-serif;
+            }}
+            .metric-label {{
+                font-size: 16px;
+                font-weight: bold;
+            }}
+            .metric-value {{
+                font-size: 24px;
+                font-weight: bold;
+            }}
+            </style>
             <div class="metric-container">
                 <span class="metric-label">Average Sales Units by 4weeks:</span>
                 <span class="metric-value">{metrics['average_sales_units_4w']:,.0f} units</span>
