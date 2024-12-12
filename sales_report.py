@@ -114,6 +114,9 @@ numeric_columns = [
     "REG SALES $", "PROMO SALES $", "CLEAR SALES $", "EOH+OT $", "GROSS MARGIN $"  # Added Gross Margin $
 ]
 
+# Columns to ignore
+ignored_columns = ["count_of_rows", "Class"]
+
 # Load data from uploaded files
 if uploaded_files:
     data_frames = []
@@ -122,6 +125,8 @@ if uploaded_files:
     progress_text = st.empty()
     progress_bar = st.progress(0)
     
+    total_files = len(uploaded_files)  # Total number of files uploaded
+
     for i, file in enumerate(uploaded_files):
         # Attempt to read the file using different encodings
         try:
@@ -140,6 +145,9 @@ if uploaded_files:
         df.columns = df.columns.str.upper()
         df = df.rename(columns=column_name_mapping)
         
+        # Remove ignored columns from the dataframe
+        df = df.drop(columns=[col for col in ignored_columns if col in df.columns], errors='ignore')
+        
         # Data Cleaning: Remove any non-numeric characters in dollar columns and convert them to floats
         for col in numeric_columns:
             if col in df.columns:
@@ -150,12 +158,18 @@ if uploaded_files:
         if 'COLOR' in df.columns and 'PID NUMBER' in df.columns:
             df['COLOR (PID NUMBER)'] = df['COLOR'] + " (" + df['PID NUMBER'] + ")"
         
+        # Aggregate rows with identical non-numeric columns by summing numeric columns
+        non_numeric_columns = [col for col in df.columns if col not in numeric_columns]
+        df = df.groupby(non_numeric_columns, as_index=False)[numeric_columns].sum()
+        
         data_frames.append(df)
         
-        # Update the progress bar
-        progress_text.text(f"Loading file {i+1} of {len(uploaded_files)}")
-        progress_bar.progress((i + 1) / len(uploaded_files))
+        # Update the progress bar and text
+        progress_percentage = int(((i + 1) / total_files) * 100)  # Calculate percentage
+        progress_text.text(f"Processing files: {progress_percentage}% complete ({i + 1}/{total_files})")
+        progress_bar.progress(progress_percentage / 100)  # Update progress bar
     
+    # Combine all dataframes into a single dataframe
     data = pd.concat(data_frames, ignore_index=True)
     progress_text.text("Files loaded successfully.")
     progress_bar.empty()
