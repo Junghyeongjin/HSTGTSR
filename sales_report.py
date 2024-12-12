@@ -104,7 +104,8 @@ column_name_mapping = {
     "PROMO SALES $": "PROMO SALES $",
     "CLEAR SALES $": "CLEAR SALES $",
     "EOH+OT $": "EOH+OT $",
-    "GROSS MARGIN $": "GROSS MARGIN $"  # Added Gross Margin $
+    "GROSS MARGIN $": "GROSS MARGIN $",  # Added Gross Margin $
+    "LOCATION STATE": "LOCATION STATE"   # Added LOCATION STATE
 }
 
 # List of columns that should be numeric
@@ -190,9 +191,6 @@ if uploaded_files:
 
         # Check if 'Converted_Date' has been created successfully
         if 'Converted_Date' in data.columns:
-            # Inform the user if any January dates were adjusted
-            if jan_adjustment_made:
-                st.write("Year of January corrected")
             
             # Drop rows where 'Converted_Date' could not be parsed for both data and full_data
             full_data = full_data.dropna(subset=['Converted_Date']).sort_values(by='Converted_Date').reset_index(drop=True)
@@ -358,6 +356,7 @@ if uploaded_files:
             - Use the toolbar in the top-right corner of data tables to download them as a CSV file or search through the content.
             - Some graphs may have multiple Y-axes (e.g., units, $, %).
             - Click the ⋮ button in the top-right corner to use the "Record a screencast" feature and create a video report with voice.
+            - There was an error where the year for January weeks was displayed as the previous year, so it was set to +1 year.
             """)
 
     # Add Korean instructions to an expander in the second column
@@ -372,6 +371,7 @@ if uploaded_files:
             - 데이터 테이블 우측 상단의 툴바를 이용해 CSV 파일로 다운로드 하거나 내용을 검색 할 수 있습니다.
             - 일부 그래프는 여러 Y축(예: 단위, $, %)을 포함할 수 있습니다.
             - 우측 상단의 ⋮ 버튼을 눌러 "Record a screencast" 기능을 사용 하시어 음성과 함께 레포트를 영상으로 만들 수 있습니다. 
+            - 1월 주들의 연도가 전년으로 표기되는 오류가 있어 +1년이 되게 설정 해두었습니다. 
             """)
 
     st.divider()
@@ -653,105 +653,50 @@ if uploaded_files:
             axis=0
         )
 
-        # Function to determine if a row represents a year (units)
-        def is_year_row(row_name):
-            return str(row_name).isdigit()
+        # Display the formatted data table
+        col1, col2, col3 = st.columns([6, 3, 1])  # Data Table (7) and Doughnut Chart (3)
 
-        # Function to apply styling based on the original numeric data
-        def highlight_rows(row):
-            if "Change (%)" in str(row.name):
-                return [
-                    'color: red; font-weight: bold' if isinstance(x, (float, int)) and x > 0 else
-                    'color: blue; font-weight: bold' if isinstance(x, (float, int)) and x < 0 else
-                    'color: gray; font-weight: bold' if pd.isna(x) else ''  # Handle "n/a" explicitly
-                    for x in original_multi_year_table.loc[row.name]
-                ]
-            if row.name == 'Total Sum':
-                return ['font-weight: bold; background-color: #f5f5f5; color: black' for _ in row]
-            if is_year_row(row.name):
-                return ['background-color: #f5f5f5; color: black' for _ in row]
-            return ['' for _ in row]
+        with col1:
+            st.write("Multi-Year Sales Units(filtered) with Yearly Changes")
+            st.dataframe(
+                pd.DataFrame(formatted_multi_year_table, index=multi_year_table.index, columns=multi_year_table.columns)
+            )
+        
+        with col2:
+            # Prepare data for Doughnut Chart
+            doughnut_data = multi_year_table.copy()
+            doughnut_data = doughnut_data.loc[~doughnut_data.index.str.contains("Change|Total", case=False, na=False)]
+            if 'Total' in doughnut_data.columns:
+                doughnut_data = doughnut_data.drop(columns=['Total'])
 
-    col1, col2, col3 = st.columns([6, 3, 1])  # Data Table (7) and Doughnut Chart (3)
+            doughnut_data['Yearly_Total'] = doughnut_data.sum(axis=1)
+            grand_total = doughnut_data['Yearly_Total'].sum()
+            doughnut_chart_data = [{"value": total, "name": str(index)} for index, total in doughnut_data['Yearly_Total'].items()]
 
-    # Data Table in Column 1
-    with col1:
-        st.write("Multi-Year Sales Units(filtered) with Yearly Changes")
-        st.dataframe(
-            pd.DataFrame(formatted_multi_year_table, index=multi_year_table.index, columns=multi_year_table.columns)
-            .style.apply(highlight_rows, axis=1)
+            # Render Doughnut Chart
+            doughnut_chart_options = {
+                "title": {"text": "Sales Units", "subtext": "Sum of All Years: 100%", "left": "center"},
+                "tooltip": {"trigger": "item", "formatter": "{a} <br/>{b}: {c} units ({d}%)"},
+                "legend": {"orient": "vertical", "left": "left", "data": [str(index) for index in doughnut_data.index]},
+                "series": [
+                    {
+                        "name": "Sales Units",
+                        "type": "pie",
+                        "radius": ["40%", "70%"],
+                        "avoidLabelOverlap": False,
+                        "itemStyle": {"borderRadius": 10, "borderColor": "#fff", "borderWidth": 2},
+                        "label": {"show": True, "position": "inside", "formatter": "{b}: {d}%"},
+                        "data": doughnut_chart_data,
+                    }
+                ],
+            }
+            st_echarts(options=doughnut_chart_options, height="500px")
+    else:
+        # Display warning for single-year data
+        st.warning(
+            "The dataset contains sales data for only a single year. A multi-year comparison requires data spanning multiple years. "
+            "Please upload data covering at least two years for this analysis."
         )
-
-    # Doughnut Chart in Column 2
-    with col2:
-        # Prepare data for the Doughnut Chart
-        doughnut_data = multi_year_table.copy()
-
-        # Exclude rows that are not actual years (e.g., "Total Sum" or rows with "Change %")
-        doughnut_data = doughnut_data.loc[~doughnut_data.index.str.contains("Change|Total", case=False, na=False)]
-
-        # Exclude the "Total" column to avoid double-counting
-        if 'Total' in doughnut_data.columns:
-            doughnut_data = doughnut_data.drop(columns=['Total'])
-
-        # Calculate the total sales across all years
-        doughnut_data['Yearly_Total'] = doughnut_data.sum(axis=1)  # Sum of sales for each year
-        grand_total = doughnut_data['Yearly_Total'].sum()  # Total sales across all years
-
-        # Convert data into a format compatible with ECharts
-        doughnut_chart_data = [
-            {"value": total, "name": str(index)} for index, total in doughnut_data['Yearly_Total'].items()
-        ]
-
-        # Define ECharts options for the Doughnut Chart
-        doughnut_chart_options = {
-            "title": {
-                "text": "Sales Units",
-                "subtext": "Sum of All Years: 100%",
-                "left": "center"
-            },
-            "tooltip": {
-                "trigger": "item",
-                "formatter": "{a} <br/>{b}: {c} units ({d}%)"
-            },
-            "legend": {
-                "orient": "vertical",
-                "left": "left",
-                "data": [str(index) for index in doughnut_data.index]  # Only actual years
-            },
-            "series": [
-                {
-                    "name": "Sales Units",
-                    "type": "pie",
-                    "radius": ["40%", "70%"],  # Inner and outer radii for the doughnut effect
-                    "avoidLabelOverlap": False,
-                    "itemStyle": {
-                        "borderRadius": 10,
-                        "borderColor": "#fff",
-                        "borderWidth": 2
-                    },
-                    "label": {
-                        "show": True,
-                        "position": "inside",
-                        "formatter": "{b}: {d}%"  # Show name and percentage only
-                    },
-                    "emphasis": {
-                        "label": {
-                            "show": True,
-                            "fontSize": "16",
-                            "fontWeight": "bold"
-                        }
-                    },
-                    "labelLine": {
-                        "show": True
-                    },
-                    "data": doughnut_chart_data
-                }
-            ]
-        }
-
-        # Render ECharts Doughnut Chart
-        st_echarts(options=doughnut_chart_options, height="500px")
 
     st.divider()
 
@@ -2512,7 +2457,127 @@ if uploaded_files:
                 <span class="metric-value">{metrics['average_inventory_units_4w']:,.0f} units</span>
             </div>
         """, unsafe_allow_html=True)
-            
+    st.divider()
+        # Ensure `filtered_data` is properly defined based on filtering logic
+
+    # ==================================== Map Section ====================================
+    # Check if 'LOCATION STATE' exists in the filtered dataset before proceeding
+    if "LOCATION STATE" in data.columns:
+        # Calculate TOTAL SALES U (if not already calculated)
+        if "TOTAL SALES U" not in data.columns:
+            data["TOTAL SALES U"] = data[["REG SALES U", "PROMO SALES U", "CLEAR SALES U"]].sum(axis=1)
+
+        # Group by 'LOCATION STATE' and aggregate relevant columns
+        grouped_data_with_location = data.groupby(["LOCATION STATE"], as_index=False).agg(
+            {"TOTAL SALES U": "sum"}
+        )
+
+        # Define layout: Icon and Map Description
+        col1, col2 = st.columns([1, 8])  # Column ratio 1:8
+
+        # Left column for the icon
+        with col1:
+            image_path = "static/usa-map.png"
+            try:
+                image = Image.open(image_path)
+                st.image(image, caption=None, use_container_width=True)
+            except FileNotFoundError:
+                st.error("Image not found. Please check the path.")
+
+        # Right column for title and description
+        with col2:
+            st.markdown(
+                """
+                <div style='font-size:24px; font-weight:bold;'>Sales Units Across US States (Filtered)</div>
+                <p style='font-size:16px;'>
+                    This map visualizes the total sales units in each state, combining regular, promotional, 
+                    and clearance sales. States with higher total sales are highlighted in green, while those with lower sales are in red. 
+                    The gradient dynamically adjusts to emphasize meaningful differences in the data.
+                </p>
+                """, 
+                unsafe_allow_html=True
+            )
+
+        # Total Sales Calculation
+        total_sales = grouped_data_with_location["TOTAL SALES U"].sum()
+
+        # Define layout for table and map
+        col1, col2 = st.columns([4, 6])  # Adjusted column segregation
+
+        # Left column for the table
+        with col1:
+            st.markdown("<div style='font-size:20px; font-weight:bold;'>State Sales Breakdown</div>", unsafe_allow_html=True)
+
+            # Merge grouped data with full state information to ensure all states are represented
+            state_info = pd.DataFrame({
+                "State": [
+                    "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado", "Connecticut", 
+                    "Delaware", "District of Columbia", "Florida", "Georgia", "Hawaii", "Idaho", "Illinois",
+                    "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine", "Maryland", "Massachusetts",
+                    "Michigan", "Minnesota", "Mississippi", "Missouri", "Montana", "Nebraska", "Nevada", 
+                    "New Hampshire", "New Jersey", "New Mexico", "New York", "North Carolina", "North Dakota", 
+                    "Ohio", "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina", 
+                    "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia", "Washington", 
+                    "West Virginia", "Wisconsin", "Wyoming"
+                ],
+                "Alpha Code": [
+                    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "DC", "FL", "GA", "HI", "ID", "IL", "IN",
+                    "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", 
+                    "NJ", "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", 
+                    "VT", "VA", "WA", "WV", "WI", "WY"
+                ]
+            })
+
+            # Merge with grouped data to include all states
+            data_summary = state_info.merge(grouped_data_with_location, left_on="Alpha Code", right_on="LOCATION STATE", how="left").fillna({"TOTAL SALES U": 0})
+
+            # Calculate the percentage contribution for each state
+            data_summary["Portion of Total (%)"] = (data_summary["TOTAL SALES U"] / total_sales * 100).round(2)
+
+            # Sort data by total sales in ascending order
+            data_summary.sort_values(by="TOTAL SALES U", ascending=False, inplace=True)
+
+            # Display the table
+            st.dataframe(
+                data_summary[["State", "Alpha Code", "TOTAL SALES U", "Portion of Total (%)"]],
+                height=800
+            )
+
+        # Right column for the map
+        with col2:
+            st.markdown("<div style='font-size:24px; font-weight:bold;'>Sales Units Across US States</div>", unsafe_allow_html=True)
+
+            # Calculate bounds for the color range dynamically
+            lower_bound = data_summary["TOTAL SALES U"].quantile(0.05)
+            upper_bound = data_summary["TOTAL SALES U"].quantile(0.95)
+
+            if lower_bound == upper_bound:  # Fallback if range is too narrow
+                lower_bound = data_summary["TOTAL SALES U"].min()
+                upper_bound = data_summary["TOTAL SALES U"].max()
+
+            # Create the map
+            fig = px.choropleth(
+                data_summary,
+                locations="Alpha Code",  # State abbreviations
+                locationmode="USA-states",  # Match to US states
+                color="TOTAL SALES U",  # Use total sales for coloring
+                color_continuous_scale="RdYlGn",  # Red to Green gradient
+                range_color=[lower_bound, upper_bound],  # Dynamic color range
+                scope="usa",  # Restrict to USA
+                labels={"TOTAL SALES U": "Total Sales Units"}  # Label for the color bar
+            )
+
+            # Customize the map layout
+            fig.update_layout(
+                geo=dict(showframe=False, showcoastlines=False),
+                height=800  # Adjust map height
+            )
+
+            # Display the map
+            st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("'LOCATION STATE' column is missing in the dataset.")
+
     # ==================================== Export Section ====================================
 
     st.divider()
