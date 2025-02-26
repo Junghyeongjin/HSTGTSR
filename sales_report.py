@@ -110,7 +110,7 @@ column_name_mapping = {
 
 # List of columns that should be numeric
 numeric_columns = [
-    "COUNT_OF_ROWS", "DEPARTMENT NUMBER", "REG SALES U", "PROMO SALES U", "CLEAR SALES U", "EOH+OT U",
+    "DEPARTMENT NUMBER", "REG SALES U", "PROMO SALES U", "CLEAR SALES U", "EOH+OT U",
     "REG SALES $", "PROMO SALES $", "CLEAR SALES $", "EOH+OT $", "GROSS MARGIN $"  # Added Gross Margin $
 ]
 
