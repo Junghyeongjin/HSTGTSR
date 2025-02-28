@@ -49,10 +49,10 @@ st.markdown(
 
    
 # Password Protection
-password = st.sidebar.text_input("Enter Access Password:", type="password")
-if password != "HansaeCJS!":
-    st.warning("Please input correct Password.")
-    st.stop()
+#password = st.sidebar.text_input("Enter Access Password:", type="password")
+#if password != "HansaeCJS!":
+    #st.warning("Please input correct Password.")
+    #st.stop()
 
 # Function to convert custom date format to datetime with error handling and year adjustment for January
 def convert_to_date_fixed(date_str):
