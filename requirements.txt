@@ -270,5 +270,5 @@ xyzservices==2024.9.0
 yfinance==0.2.26
 zipp==3.21.0
 zope.interface==6.4.post2
-setuptools
-wheel
+setuptools>=65.5.0
+wheel>=0.38.4
