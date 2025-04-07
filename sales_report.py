@@ -3,21 +3,25 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import timedelta
+from datetime import datetime 
+import requests
 from PIL import Image
 import base64
 import numpy as np
 from streamlit_echarts import st_echarts
 import io
+from scipy.stats import pearsonr
+import calendar
 
 
-# Function to convert the GIF file into Base64 format
+
+st.set_page_config(layout="wide")    
+
 def get_image_file_as_base64(file_path):
     """Convert an image file to a Base64 string."""
     with open(file_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
-# Set the page layout to wide
-st.set_page_config(layout="wide")
 
 # Correct absolute path to your GIF image
 gif_path = "static/Sales_report.gif"
@@ -28,8 +32,8 @@ try:
     gif_html = f"""
     <div style="text-align: center; margin-bottom: 20px;">
         <img src="data:image/gif;base64,{gif_base64}" 
-             style="width:800px; height:600px;"  <!-- Adjust size -->
-             
+            style="width:800px; height:600px;"  <!-- Adjust size -->
+            
     </div>
     """
     st.markdown(gif_html, unsafe_allow_html=True)
@@ -47,42 +51,42 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-   
-# Password Protection
-#password = st.sidebar.text_input("Enter Access Password:", type="password")
-#if password != "HansaeCJS!":
-    #st.warning("Please input correct Password.")
-    #st.stop()
 
-# Function to convert custom date format to datetime with error handling and year adjustment for January
 def convert_to_date_fixed(date_str):
-    if pd.isna(date_str):  # Check for NaN or None values
+    if pd.isna(date_str):  # Check for NaN
         return None
+
     try:
+        # Case 1: If the string is already in YYYY-MM-DD format
+        if isinstance(date_str, str) and date_str.count('-') == 2:
+            return pd.to_datetime(date_str, errors='coerce')  # return directly
+
+        # Case 2: Handle the "Jun Wk 3 2024" format
         parts = str(date_str).split()
         month = parts[0]
-        week_number = int(parts[2])  # Extract the numeric part after "Wk"
+        week_number = int(parts[2])  # Extract week number
         year = int(parts[3])
-        
-        # Map months to numerical values
+
+        # Month mapping
         month_mapping = {
             "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4,
             "May": 5, "Jun": 6, "Jul": 7, "Aug": 8,
             "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12
         }
-        
-        # Adjust year for January
-        if month == "Jan":
-            year += 1
 
-        # Calculate the starting date of the given week in the given month and year
-        first_day_of_month = pd.Timestamp(year=year, month=month_mapping[month], day=1)
-        start_of_week = first_day_of_month + pd.DateOffset(weeks=week_number - 1)
-        
-        return start_of_week
-    except (IndexError, ValueError, KeyError):
+        if month == "Jan":
+            year += 1  # Adjustment (optional logic)
+
+        first_day = pd.Timestamp(year=year, month=month_mapping[month], day=1)
+        first_sunday = first_day + pd.DateOffset(days=(6 - first_day.weekday() + 1) % 7)
+        week_start = first_sunday + pd.DateOffset(weeks=week_number - 1)
+
+        return week_start
+
+    except Exception:
         return None
 
+    
 # Upload CSV Files and enforce UTF-8, UTF-8-SIG, or GB2312 encoding with error handling
 uploaded_files = st.sidebar.file_uploader("Upload Sales Report CSV Files - from GreenField", accept_multiple_files=True, type=["csv"])
 
@@ -110,12 +114,134 @@ column_name_mapping = {
 
 # List of columns that should be numeric
 numeric_columns = [
-    "DEPARTMENT NUMBER", "REG SALES U", "PROMO SALES U", "CLEAR SALES U", "EOH+OT U",
+   "DEPARTMENT NUMBER", "REG SALES U", "PROMO SALES U", "CLEAR SALES U", "EOH+OT U",
     "REG SALES $", "PROMO SALES $", "CLEAR SALES $", "EOH+OT $", "GROSS MARGIN $"  # Added Gross Margin $
 ]
 
 # Columns to ignore
 ignored_columns = ["count_of_rows", "Class"]
+@st.cache_data
+def calculate_total_sales(data):
+    """ Calculate total sales if not already in the data """
+    if "TOTAL SALES U" not in data.columns:
+        data["TOTAL SALES U"] = data[["REG SALES U", "PROMO SALES U", "CLEAR SALES U"]].sum(axis=1)
+    return data
+
+@st.cache_data
+def group_data_by_location(data):
+    """ Group data by LOCATION STATE and sum up TOTAL SALES U """
+    return data.groupby(["LOCATION STATE"], as_index=False).agg({"TOTAL SALES U": "sum"})
+
+@st.cache_data(ttl=86400)
+def fetch_us_state_monthly_weather():
+    start_date = "2021-01-01"
+    end_date = datetime.today().strftime("%Y-%m-%d")
+
+    # 주별 대표 도시 좌표 기준
+    state_coords = {
+        "AL": (32.366805, -86.299969),    # Montgomery
+        "AK": (61.218056, -149.900284),   # Anchorage
+        "AZ": (33.448376, -112.074036),   # Phoenix
+        "AR": (34.746483, -92.289597),    # Little Rock
+        "CA": (34.052235, -118.243683),   # Los Angeles
+        "CO": (39.739235, -104.990250),   # Denver
+        "CT": (41.765804, -72.673372),    # Hartford
+        "DE": (39.158169, -75.524368),    # Dover
+        "FL": (30.438256, -84.280733),    # Tallahassee
+        "GA": (33.749099, -84.390185),    # Atlanta
+        "HI": (21.306944, -157.858337),   # Honolulu
+        "ID": (43.615021, -116.202316),   # Boise
+        "IL": (39.781721, -89.650148),    # Springfield
+        "IN": (39.768402, -86.158066),    # Indianapolis
+        "IA": (41.591087, -93.603729),    # Des Moines
+        "KS": (39.048191, -95.677956),    # Topeka
+        "KY": (38.252666, -85.758453),    # Louisville
+        "LA": (30.451468, -91.187149),    # Baton Rouge
+        "ME": (44.307167, -69.781693),    # Augusta
+        "MD": (38.978444, -76.492180),    # Annapolis
+        "MA": (42.360081, -71.058884),    # Boston
+        "MI": (42.331429, -83.045753),    # Detroit
+        "MN": (44.977753, -93.265015),    # Minneapolis
+        "MS": (32.298690, -90.180489),    # Jackson
+        "MO": (38.576668, -92.173515),    # Jefferson City
+        "MT": (46.589145, -112.039104),   # Helena
+        "NE": (40.813616, -96.702595),    # Lincoln
+        "NV": (39.163798, -119.767403),   # Carson City
+        "NH": (43.208137, -71.537572),    # Concord
+        "NJ": (40.220596, -74.769913),    # Trenton
+        "NM": (35.084385, -106.650421),   # Albuquerque
+        "NY": (40.712776, -74.005974),    # New York City
+        "NC": (35.227085, -80.843124),    # Charlotte
+        "ND": (46.808327, -100.783739),   # Bismarck
+        "OH": (39.961178, -82.998795),    # Columbus
+        "OK": (35.467560, -97.516426),    # Oklahoma City
+        "OR": (44.942898, -123.035096),   # Salem
+        "PA": (40.273191, -76.886701),    # Harrisburg
+        "RI": (41.823990, -71.412834),    # Providence
+        "SC": (34.000710, -81.034814),    # Columbia
+        "SD": (44.368316, -100.351524),   # Pierre
+        "TN": (36.162663, -86.781601),    # Nashville
+        "TX": (29.760427, -95.369804),    # Houston
+        "UT": (40.760780, -111.891045),   # Salt Lake City
+        "VT": (44.260059, -72.575386),    # Montpelier
+        "VA": (37.540726, -77.436050),    # Richmond
+        "WA": (47.606209, -122.332069),   # Seattle
+        "WV": (38.349819, -81.632622),    # Charleston
+        "WI": (43.073051, -89.401230),    # Madison
+        "WY": (41.140259, -104.820236),   # Cheyenne
+        "DC": (38.907192, -77.036873)     # Washington D.C.
+    }
+
+    records = []
+
+    for state, (lat, lon) in state_coords.items():
+        print(f"📡 Fetching: {state}")
+
+        url = "https://archive-api.open-meteo.com/v1/archive"
+        params = {
+            "latitude": lat,
+            "longitude": lon,
+            "start_date": start_date,
+            "end_date": end_date,
+            "daily": "temperature_2m_max,temperature_2m_min",
+            "timezone": "America/New_York"
+        }
+
+        try:
+            res = requests.get(url, params=params)
+            res.raise_for_status()
+            data = res.json()
+
+            if "daily" not in data:
+                print(f"⚠️ No daily data for {state}")
+                continue
+
+            daily_df = pd.DataFrame({
+                "date": pd.to_datetime(data["daily"]["time"]),
+                "tmin": data["daily"]["temperature_2m_min"],
+                "tmax": data["daily"]["temperature_2m_max"]
+            })
+
+            daily_df["tavg"] = (daily_df["tmin"] + daily_df["tmax"]) / 2
+            daily_df["Year"] = daily_df["date"].dt.year
+            daily_df["Month"] = daily_df["date"].dt.month
+
+            monthly_avg = (
+                daily_df.groupby(["Year", "Month"])["tavg"]
+                .mean().reset_index()
+                .assign(State=state)
+                .rename(columns={"tavg": "Avg_Temp_C"})
+            )
+
+            records.append(monthly_avg[["State", "Year", "Month", "Avg_Temp_C"]])
+
+        except Exception as e:
+            print(f"❌ Error for {state}: {e}")
+
+    weather_df = pd.concat(records, ignore_index=True)
+    weather_df.sort_values(by=["State", "Year", "Month"], inplace=True)
+
+    return weather_df
 
 # Load data from uploaded files
 if uploaded_files:
@@ -1508,7 +1634,7 @@ if uploaded_files:
         eoh_ot_color = "skyblue"  # For historical EOH+OT U
         forecast_eoh_ot_fill_color = "lightskyblue"  # For forecasted EOH+OT U with translucent color
         sales_pct_color = "blue"  # Sales % should be red as per instruction
-      
+    
         # Create three columns with equal width
         col1, col2, col3 = st.columns(3)
         # Column 1: Forecasting period, date range, and sales adjustment
@@ -2589,9 +2715,207 @@ if uploaded_files:
 
             # Display the map
             st.plotly_chart(fig, use_container_width=True)
+            # ==================================== Small Sales + Temp Chart for Top 5 States ====================================
+
+
     else:
         st.warning("'LOCATION STATE' column is missing in the dataset.")
 
+    # ==================================== 온도추가 ====================================
+    # ==================================== Individual Charts for Top 5 States ====================================
+
+    st.divider()
+
+    top_5_states = data_summary.nlargest(10, "TOTAL SALES U")["Alpha Code"].tolist()
+
+    # Ensure date breakdown
+    data['Year'] = pd.to_datetime(data['DATE'], errors='coerce').dt.year
+    data['Month'] = pd.to_datetime(data['DATE'], errors='coerce').dt.month
+    monthly_sales = data.groupby(['LOCATION STATE', 'Year', 'Month'], as_index=False)['TOTAL SALES U'].sum()
+
+    # Load weather data
+    weather_df = fetch_us_state_monthly_weather()
+    weather_df.rename(columns={'State': 'LOCATION STATE'}, inplace=True)
+    merged_df = pd.merge(monthly_sales, weather_df, on=['LOCATION STATE', 'Year', 'Month'], how='left')
+
+    # Similar state fallback map
+    similar_states = {
+        "AL": ["GA", "MS"], "AK": ["WA", "MT"], "AZ": ["NM", "NV"], "AR": ["MO", "LA"],
+        "CA": ["NV", "OR"], "CO": ["UT", "NM"], "CT": ["MA", "NY"], "DE": ["MD", "PA"],
+        "FL": ["GA", "AL"], "GA": ["FL", "AL"], "HI": ["CA"], "ID": ["WA", "MT"],
+        "IL": ["IN", "MO"], "IN": ["OH", "IL"], "IA": ["NE", "IL"], "KS": ["OK", "MO"],
+        "KY": ["TN", "OH"], "LA": ["TX", "MS"], "ME": ["NH"], "MD": ["VA", "PA"],
+        "MA": ["CT", "NH"], "MI": ["WI", "IN"], "MN": ["WI", "IA"], "MS": ["LA", "AL"],
+        "MO": ["KS", "IL"], "MT": ["WY", "ID"], "NE": ["IA", "KS"], "NV": ["UT", "CA"],
+        "NH": ["MA", "VT"], "NJ": ["PA", "NY"], "NM": ["AZ", "TX"], "NY": ["NJ", "PA"],
+        "NC": ["SC", "VA"], "ND": ["SD", "MN"], "OH": ["PA", "IN"], "OK": ["TX", "KS"],
+        "OR": ["WA", "CA"], "PA": ["OH", "NY"], "RI": ["MA", "CT"], "SC": ["NC", "GA"],
+        "SD": ["ND", "NE"], "TN": ["KY", "GA"], "TX": ["OK", "NM"], "UT": ["NV", "CO"],
+        "VT": ["NH", "NY"], "VA": ["NC", "MD"], "WA": ["OR", "ID"], "WV": ["VA", "PA"],
+        "WI": ["MN", "IL"], "WY": ["MT", "CO"], "DC": ["MD", "VA"]
+    }
+
+    # Handle missing Avg_Temp_C values
+    for idx in weather_df[weather_df['Avg_Temp_C'].isna()].index:
+        state = weather_df.at[idx, 'LOCATION STATE']
+        year = weather_df.at[idx, 'Year']
+        month = weather_df.at[idx, 'Month']
+
+        # Step 1: Try nearby states
+        filled = False
+        for fallback in similar_states.get(state, []):
+            fallback_row = weather_df[
+                (weather_df['LOCATION STATE'] == fallback) &
+                (weather_df['Year'] == year) &
+                (weather_df['Month'] == month)
+            ]
+            if not fallback_row.empty:
+                weather_df.at[idx, 'Avg_Temp_C'] = fallback_row['Avg_Temp_C'].values[0]
+                filled = True
+                break
+        if filled:
+            continue
+
+        # Step 2: Try adjacent months in same state
+        prev_val = weather_df[
+            (weather_df['LOCATION STATE'] == state) &
+            (weather_df['Year'] == year) &
+            (weather_df['Month'] == month - 1)
+        ]['Avg_Temp_C'].mean() if month > 1 else None
+
+        next_val = weather_df[
+            (weather_df['LOCATION STATE'] == state) &
+            (weather_df['Year'] == year) &
+            (weather_df['Month'] == month + 1)
+        ]['Avg_Temp_C'].mean() if month < 12 else None
+
+        if pd.notnull(prev_val) and pd.notnull(next_val):
+            weather_df.at[idx, 'Avg_Temp_C'] = (prev_val + next_val) / 2
+        elif pd.notnull(prev_val):
+            weather_df.at[idx, 'Avg_Temp_C'] = prev_val
+        elif pd.notnull(next_val):
+            weather_df.at[idx, 'Avg_Temp_C'] = next_val
+        else:
+            # Step 3: Use national average
+            national_avg = weather_df[
+                (weather_df['Year'] == year) & (weather_df['Month'] == month)
+            ]['Avg_Temp_C'].mean()
+            weather_df.at[idx, 'Avg_Temp_C'] = national_avg
+
+    # Merge sales and weather
+    merged_df = pd.merge(monthly_sales, weather_df, on=['LOCATION STATE', 'Year', 'Month'], how='left')
+    merged_df['YearMonth'] = pd.to_datetime(merged_df[['Year', 'Month']].assign(DAY=1))
+
+    # Column layout: 7:3
+    col1, col2 = st.columns([7, 3])
+
+    with col1:
+        st.markdown("#### 📊 Top 10 States: Monthly Sales vs Avg Temp")
+
+        for state_code in top_5_states:
+            state_data = merged_df[merged_df["LOCATION STATE"] == state_code].copy()
+            state_name = state_info[state_info["Alpha Code"] == state_code]["State"].values[0]
+
+            fig = px.line(
+                state_data,
+                x="YearMonth",
+                y="TOTAL SALES U",
+                title=f"{state_name} - Sales & Temp Trend",
+                labels={"TOTAL SALES U": "Sales Units"},
+                line_shape="spline"
+            )
+
+            fig.add_scatter(
+                x=state_data["YearMonth"],
+                y=state_data["Avg_Temp_C"],
+                mode="lines",
+                name="Avg Temp (°C)",
+                yaxis="y2",
+                line=dict(color="red", dash="dot")
+            )
+
+            fig.update_layout(
+                height=300,
+                yaxis=dict(title="Sales Units"),
+                yaxis2=dict(title="Avg Temp (°C)", overlaying="y", side="right"),
+                margin=dict(l=20, r=20, t=40, b=20),
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        st.markdown("#### 🔗 Correlation (Temp vs Sales)")
+
+        st.markdown("""
+    ##### 📈 Pearson Correlation Coefficient (피어슨 상관계수)
+
+    - The **Pearson correlation coefficient (ρ)** measures the **strength and direction** of the **linear relationship** between two continuous variables — in this case, **monthly sales** and **average temperature**.
+    - 피어슨 상관계수는 두 연속형 변수 간의 **선형 관계의 강도와 방향**을 나타내는 지표입니다. 여기서는 **월별 판매량**과 **평균 기온** 간의 관계를 측정합니다.
+        """)
+
+        with st.expander("🔢 Formula | 공식"):
+            st.latex(r"""
+            ρ = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum (x_i - \bar{x})^2} \sqrt{\sum (y_i - \bar{y})^2}}
+            """)
+            st.markdown("""
+            - Where:  
+              - \(x_i\): Temperature  
+              - \(y_i\): Sales  
+              - \(\bar{x}, \bar{y}\): Mean of temperature and sales respectively
+            """)
+
+        with st.expander("📊 Interpretation | 해석"):
+            st.markdown("""
+            | ρ value (값) | Interpretation (해석) |
+            |--------------|------------------------|
+            | **+1.0**     | Perfect positive correlation (완전한 양의 상관관계) |
+            | **0.0**      | No linear correlation (선형 상관 없음) |
+            | **-1.0**     | Perfect negative correlation (완전한 음의 상관관계) |
+
+            - A **positive** ρ (closer to **+1**) means sales **increase** as temperature rises.  
+            **양의 상관계수** (ρ가 **+1**에 가까울수록) 는 온도가 상승함에 따라 판매량이 **증가**한다는 의미입니다.
+            
+            - A **negative** ρ (closer to **-1**) means sales **decrease** as temperature rises (i.e., the two variables move in opposite directions).  
+            **음의 상관계수** (ρ가 **-1**에 가까울수록) 는 온도가 상승함에 따라 판매량이 **감소**한다는 의미입니다 (즉, 두 변수는 반대 방향으로 움직입니다).
+            
+            - **0** means there's **no linear** relationship between temperature and sales.  
+            **0**은 온도와 판매량 간에 **선형적인 관계가 없다**는 의미입니다.
+            """)
+
+        with st.expander("📊 Meaningful Range for ρ | 유의미한 범위"):
+            st.markdown("""
+            - **0.1 to 0.3**: Weak positive correlation (약한 양의 상관관계)
+            - **0.3 to 0.5**: Moderate positive correlation (중간 정도의 양의 상관관계)
+            - **0.5 to 1.0**: Strong positive correlation (강한 양의 상관관계)
+            - **-0.1 to -0.3**: Weak negative correlation (약한 음의 상관관계)
+            - **-0.3 to -0.5**: Moderate negative correlation (중간 정도의 음의 상관관계)
+            - **-0.5 to -1.0**: Strong negative correlation (강한 음의 상관관계)
+            """)
+
+
+        for state_code in top_5_states:
+            state_data = merged_df[merged_df["LOCATION STATE"] == state_code].copy()
+
+            if len(state_data) >= 2:
+                corr, _ = pearsonr(state_data["TOTAL SALES U"], state_data["Avg_Temp_C"])
+                st.markdown(f"**{state_code}** : ρ = `{corr:.2f}`")
+            else:
+                st.markdown(f"**{state_code}** : Not enough data")
+
+
+    st.markdown("""
+    ---
+    ##### 🌡️ Temperature Data Notes
+
+    - **Source**: Weather data is retrieved in real-time from the [Open-Meteo Archive API](https://open-meteo.com/).
+    - **Coordinates**: Each U.S. state is represented by its capital city's approximate coordinates.
+    - **Missing Data Handling**:
+        1. If a state has missing temperature data for a given month, we use data from a **nearby (adjacent) state** as a fallback.
+        2. If nearby state data is also unavailable, we fill the gap using the **average of the previous and next month** for the same state.
+        3. If those are missing too, we fall back to the **national average** for that month.
+
+    """)
     # ==================================== Export Section ====================================
 
     st.divider()
