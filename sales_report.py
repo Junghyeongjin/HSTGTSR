@@ -140,7 +140,7 @@ import streamlit as st
 @st.cache_data(ttl=86400)
 def fetch_us_state_monthly_weather():
     start_date = "2021-01-01"
-    end_date = datetime.today().strftime("%Y-%m-%d")
+    end_date = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
 
     # 주별 대표 도시 좌표 기준
     state_coords = {
