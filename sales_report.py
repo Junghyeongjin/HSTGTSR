@@ -132,6 +132,11 @@ def group_data_by_location(data):
     """ Group data by LOCATION STATE and sum up TOTAL SALES U """
     return data.groupby(["LOCATION STATE"], as_index=False).agg({"TOTAL SALES U": "sum"})
 
+import requests
+import pandas as pd
+from datetime import datetime
+import streamlit as st
+
 @st.cache_data(ttl=86400)
 def fetch_us_state_monthly_weather():
     start_date = "2021-01-01"
@@ -209,7 +214,12 @@ def fetch_us_state_monthly_weather():
 
         try:
             res = requests.get(url, params=params)
-            res.raise_for_status()
+
+            # Debugging output: Checking response status
+            print(f"State: {state} | Status Code: {res.status_code}")
+
+            res.raise_for_status()  # Raise an exception for HTTP errors
+
             data = res.json()
 
             if "daily" not in data:
@@ -235,13 +245,19 @@ def fetch_us_state_monthly_weather():
 
             records.append(monthly_avg[["State", "Year", "Month", "Avg_Temp_C"]])
 
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             print(f"❌ Error for {state}: {e}")
+        except Exception as e:
+            print(f"❌ Unexpected error for {state}: {e}")
 
-    weather_df = pd.concat(records, ignore_index=True)
-    weather_df.sort_values(by=["State", "Year", "Month"], inplace=True)
+    if records:
+        weather_df = pd.concat(records, ignore_index=True)
+        weather_df.sort_values(by=["State", "Year", "Month"], inplace=True)
+        return weather_df
+    else:
+        print("No data was fetched.")
+        return pd.DataFrame()  # Return an empty DataFrame if no records were fetched
 
-    return weather_df
 
 # Load data from uploaded files
 if uploaded_files:
