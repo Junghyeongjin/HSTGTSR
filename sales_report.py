@@ -2859,6 +2859,48 @@ if uploaded_files:
             )
 
             st.plotly_chart(fig, use_container_width=True)
+            # ======================== 온도 구간별 판매량 테이블 추가 ========================
+            state_data["Temp_Bin"] = pd.cut(
+                state_data["Avg_Temp_C"],
+                bins=[-10, 0, 5, 10, 15, 20, 25, 30, 35, 100],
+                labels=["-10~0°C", "0~5°C", "5~10°C", "10~15°C", "15~20°C", "20~25°C", "25~30°C", "30~35°C", "35°C+"],
+                right=False
+            )
+
+            bin_summary = (
+                state_data.groupby("Temp_Bin")["TOTAL SALES U"]
+                .sum()
+                .reset_index()
+                .dropna()
+                .sort_values("Temp_Bin")
+            )
+
+            # 0인 구간 제거
+            bin_summary = bin_summary[bin_summary["TOTAL SALES U"] > 0]
+
+            # 비율 컬럼 추가
+            total_sales = bin_summary["TOTAL SALES U"].sum()
+            bin_summary["% of Total"] = (bin_summary["TOTAL SALES U"] / total_sales * 100).round(1).astype(str) + " %"
+
+            # 정수 판매량 + pcs 표기
+            bin_summary["Total Sales"] = bin_summary["TOTAL SALES U"].astype(int).astype(str) + " pcs"
+
+            # 컬럼 정리
+            bin_summary = bin_summary[["Temp_Bin", "Total Sales", "% of Total"]]
+            bin_summary.columns = ["Avg Temp Range", "Total Sales", "% of Total"]
+
+            # 합계 row 추가
+            total_row = pd.DataFrame({
+                "Avg Temp Range": ["Total"],
+                "Total Sales": [f"{int(total_sales):,} pcs"],
+                "% of Total": ["100 %"]
+            })
+
+            bin_summary = pd.concat([bin_summary, total_row], ignore_index=True)
+
+            # 테이블 출력
+            st.markdown("**🧊 Temperature Range vs Sales Volume**")
+            st.dataframe(bin_summary, use_container_width=True)
 
     with col2:
         st.markdown("#### 🔗 Correlation (Temp vs Sales)")
