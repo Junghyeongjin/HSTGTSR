@@ -12,6 +12,8 @@ from streamlit_echarts import st_echarts
 import io
 from scipy.stats import pearsonr
 import calendar
+import time 
+
 
 
 
@@ -137,6 +139,7 @@ import pandas as pd
 from datetime import datetime
 import streamlit as st
 
+@st.cache_data(ttl=86400)
 def fetch_us_state_monthly_weather():
     start_date = "2021-01-01"
     end_date = (datetime.today() - timedelta(days=1)).strftime("%Y-%m-%d")
@@ -213,6 +216,8 @@ def fetch_us_state_monthly_weather():
 
         try:
             res = requests.get(url, params=params)
+            # ✅ 요청 간 딜레이 추가
+            time.sleep(1.5)
 
             # Debugging output: Checking response status
             print(f"State: {state} | Status Code: {res.status_code}")
