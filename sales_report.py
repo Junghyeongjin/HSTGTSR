@@ -2826,7 +2826,43 @@ if uploaded_files:
     merged_df = pd.merge(monthly_sales, weather_df, on=['LOCATION STATE', 'Year', 'Month'], how='left')
     merged_df['YearMonth'] = pd.to_datetime(merged_df[['Year', 'Month']].assign(DAY=1))
 
-    # Column layout: 7:3
+    col1, col2, col3 = st.columns([1, 1, 1])
+
+    with col1:
+        with st.expander("🌡️ Temp Data Description | 온도 데이터 설명"):
+            st.markdown("""
+            - **Source | 데이터 출처**:  
+            Weather data is retrieved in real-time from the [Open-Meteo Archive API](https://open-meteo.com/).  
+            날씨 데이터는 [Open-Meteo Archive API](https://open-meteo.com/)에서 실시간으로 수집됩니다.
+
+            - **Coordinates | 좌표 기준**:  
+            Each U.S. state is represented by the **approximate coordinates of its capital city**.  
+            각 미국 주는 해당 주의 대표 도시의 좌표를 대표값으로 사용합니다.
+            """)
+
+    with col2:
+        with st.expander("🧮 Temp Comparison Method | 온도 비교 방식 안내"):
+            st.markdown("""
+            - **Absolute Temperature Comparison | 절대 온도 비교**  
+            Temperatures are grouped into **fixed Celsius ranges** (e.g., 0–5°C, 5–10°C, etc.).  
+            기온을 **고정된 섭씨 구간**(예: 0–5°C, 5–10°C 등)으로 나눕니다.
+
+            Enables **consistent comparison across states**, regardless of climate differences.  
+            지역 기후 차이에 관계없이 **모든 주를 동일한 기준**으로 비교할 수 있습니다.
+
+            - **Relative Temperature Comparison | 상대 온도 비교**  
+            Each state’s temperatures are divided into **quintiles (5 groups)** based on that state’s own data.  
+            각 주의 기온 분포를 기준으로 **5분위(Quintile)** 구간으로 나눕니다.
+
+            Labels like *Coldest*, *Cool*, *Neutral*, *Warm*, *Hottest* are **relative to that state**.  
+            *Coldest*, *Cool*, *Neutral*, *Warm*, *Hottest*는 **해당 주의 상대 기준**으로 지정됩니다.
+            """)
+
+    # col3은 비워두거나 다른 정보 넣기 용도로 남겨둘 수 있어요.
+
+    temp_mode = st.radio("Select View Mode", ["Absolute Temperature", "Relative Temperature"], horizontal=True)
+
+    # Column layout
     col1, col2 = st.columns([7, 3])
 
     with col1:
@@ -2836,6 +2872,7 @@ if uploaded_files:
             state_data = merged_df[merged_df["LOCATION STATE"] == state_code].copy()
             state_name = state_info[state_info["Alpha Code"] == state_code]["State"].values[0]
 
+            # 라인 그래프 생성
             fig = px.line(
                 state_data,
                 x="YearMonth",
@@ -2863,48 +2900,115 @@ if uploaded_files:
             )
 
             st.plotly_chart(fig, use_container_width=True)
-            # ======================== 온도 구간별 판매량 테이블 추가 ========================
-            state_data["Temp_Bin"] = pd.cut(
-                state_data["Avg_Temp_C"],
-                bins=[-10, 0, 5, 10, 15, 20, 25, 30, 35, 100],
-                labels=["-10~0°C", "0~5°C", "5~10°C", "10~15°C", "15~20°C", "20~25°C", "25~30°C", "30~35°C", "35°C+"],
-                right=False
-            )
 
+            # ======================== 온도 구간별 테이블 ========================
+            if temp_mode == "Absolute Temperature":
+                state_data["Temp_Bin"] = pd.cut(
+                    state_data["Avg_Temp_C"],
+                    bins=[-10, 0, 5, 10, 15, 20, 25, 30, 35, 100],
+                    labels=["-10~0°C", "0~5°C", "5~10°C", "10~15°C", "15~20°C", "20~25°C", "25~30°C", "30~35°C", "35°C+"],
+                    right=False
+                )
+                group_col = "Temp_Bin"
+                label_col = "Avg Temp Range"
+
+            else:  # Relative Temperature
+                state_data["Temp_Level"] = pd.qcut(
+                    state_data["Avg_Temp_C"],
+                    q=5,
+                    labels=["Coldest", "Cool", "Neutral", "Warm", "Hottest"]
+                )
+
+                temp_ranges = state_data.groupby("Temp_Level")["Avg_Temp_C"].agg(["min", "max"]).round(1)
+                temp_ranges["range_str"] = temp_ranges.apply(
+                    lambda row: f"({row['min']}°C ~ {row['max']}°C)", axis=1
+                )
+
+                label_map = {
+                    level: f"{level} {temp_ranges.loc[level, 'range_str']}"
+                    for level in temp_ranges.index
+                }
+
+                state_data["Temp_Label"] = state_data["Temp_Level"].map(label_map)
+                group_col = "Temp_Label"
+                label_col = "Relative Temp in State"
+
+            # 그룹바이 테이블 생성
             bin_summary = (
-                state_data.groupby("Temp_Bin")["TOTAL SALES U"]
+                state_data.groupby(group_col)["TOTAL SALES U"]
                 .sum()
                 .reset_index()
                 .dropna()
-                .sort_values("Temp_Bin")
+                .sort_values(group_col)
             )
 
-            # 0인 구간 제거
             bin_summary = bin_summary[bin_summary["TOTAL SALES U"] > 0]
 
-            # 비율 컬럼 추가
             total_sales = bin_summary["TOTAL SALES U"].sum()
             bin_summary["% of Total"] = (bin_summary["TOTAL SALES U"] / total_sales * 100).round(1).astype(str) + " %"
-
-            # 정수 판매량 + pcs 표기
             bin_summary["Total Sales"] = bin_summary["TOTAL SALES U"].astype(int).astype(str) + " pcs"
 
-            # 컬럼 정리
-            bin_summary = bin_summary[["Temp_Bin", "Total Sales", "% of Total"]]
-            bin_summary.columns = ["Avg Temp Range", "Total Sales", "% of Total"]
+            bin_summary = bin_summary[[group_col, "Total Sales", "% of Total"]]
+            bin_summary.columns = [label_col, "Total Sales", "% of Total"]
 
-            # 합계 row 추가
             total_row = pd.DataFrame({
-                "Avg Temp Range": ["Total"],
+                label_col: ["Total"],
                 "Total Sales": [f"{int(total_sales):,} pcs"],
                 "% of Total": ["100 %"]
             })
 
             bin_summary = pd.concat([bin_summary, total_row], ignore_index=True)
 
-            # 테이블 출력
-            st.markdown("**🧊 Temperature Range vs Sales Volume**")
+            st.markdown("**🧊 Temperature vs Sales Volume (State Level)**")
             st.dataframe(bin_summary, use_container_width=True)
+
+    # ======================== National Summary ========================
+    st.markdown("### 🌎 National Summary")
+
+    if temp_mode == "Absolute Temperature":
+        merged_df["Temp_Bin"] = pd.cut(
+            merged_df["Avg_Temp_C"],
+            bins=[-10, 0, 5, 10, 15, 20, 25, 30, 35, 100],
+            labels=["-10~0°C", "0~5°C", "5~10°C", "10~15°C", "15~20°C", "20~25°C", "25~30°C", "30~35°C", "35°C+"],
+            right=False
+        )
+        group_col_all = "Temp_Bin"
+        label_col_all = "Avg Temp Range"
+    else:
+        merged_df["Temp_Level"] = pd.qcut(
+            merged_df["Avg_Temp_C"],
+            q=5,
+            labels=["Coldest", "Cool", "Neutral", "Warm", "Hottest"]
+        )
+        group_col_all = "Temp_Level"
+        label_col_all = "Relative Temp"
+
+    bin_summary_all = (
+        merged_df.groupby(group_col_all)["TOTAL SALES U"]
+        .sum()
+        .reset_index()
+        .dropna()
+        .sort_values(group_col_all)
+    )
+
+    bin_summary_all = bin_summary_all[bin_summary_all["TOTAL SALES U"] > 0]
+
+    total_sales_all = bin_summary_all["TOTAL SALES U"].sum()
+    bin_summary_all["% of Total"] = (bin_summary_all["TOTAL SALES U"] / total_sales_all * 100).round(1).astype(str) + " %"
+    bin_summary_all["Total Sales"] = bin_summary_all["TOTAL SALES U"].astype(int).astype(str) + " pcs"
+
+    bin_summary_all = bin_summary_all[[group_col_all, "Total Sales", "% of Total"]]
+    bin_summary_all.columns = [label_col_all, "Total Sales", "% of Total"]
+
+    total_row_all = pd.DataFrame({
+        label_col_all: ["Total"],
+        "Total Sales": [f"{int(total_sales_all):,} pcs"],
+        "% of Total": ["100 %"]
+    })
+
+    bin_summary_all = pd.concat([bin_summary_all, total_row_all], ignore_index=True)
+
+    st.dataframe(bin_summary_all, use_container_width=True)
 
     with col2:
         st.markdown("#### 🔗 Correlation (Temp vs Sales)")
@@ -2912,13 +3016,13 @@ if uploaded_files:
         st.markdown("""
     ##### 📈 Pearson Correlation Coefficient (피어슨 상관계수)
 
-    - The **Pearson correlation coefficient (ρ)** measures the **strength and direction** of the **linear relationship** between two continuous variables — in this case, **monthly sales** and **average temperature**.
+    - The **Pearson correlation coefficient (r)** measures the **strength and direction** of the **linear relationship** between two continuous variables — in this case, **monthly sales** and **average temperature**.
     - 피어슨 상관계수는 두 연속형 변수 간의 **선형 관계의 강도와 방향**을 나타내는 지표입니다. 여기서는 **월별 판매량**과 **평균 기온** 간의 관계를 측정합니다.
         """)
 
         with st.expander("🔢 Formula | 공식"):
             st.latex(r"""
-            ρ = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum (x_i - \bar{x})^2} \sqrt{\sum (y_i - \bar{y})^2}}
+            r = \frac{\sum (x_i - \bar{x})(y_i - \bar{y})}{\sqrt{\sum (x_i - \bar{x})^2} \sqrt{\sum (y_i - \bar{y})^2}}
             """)
             st.markdown("""
             - Where:  
@@ -2929,23 +3033,23 @@ if uploaded_files:
 
         with st.expander("📊 Interpretation | 해석"):
             st.markdown("""
-            | ρ value (값) | Interpretation (해석) |
+            | r value (값) | Interpretation (해석) |
             |--------------|------------------------|
             | **+1.0**     | Perfect positive correlation (완전한 양의 상관관계) |
             | **0.0**      | No linear correlation (선형 상관 없음) |
             | **-1.0**     | Perfect negative correlation (완전한 음의 상관관계) |
 
-            - A **positive** ρ (closer to **+1**) means sales **increase** as temperature rises.  
-            **양의 상관계수** (ρ가 **+1**에 가까울수록) 는 온도가 상승함에 따라 판매량이 **증가**한다는 의미입니다.
+            - A **positive** r (closer to **+1**) means sales **increase** as temperature rises.  
+            **양의 상관계수** (r이 **+1**에 가까울수록) 는 온도가 상승함에 따라 판매량이 **증가**한다는 의미입니다.
             
-            - A **negative** ρ (closer to **-1**) means sales **decrease** as temperature rises (i.e., the two variables move in opposite directions).  
-            **음의 상관계수** (ρ가 **-1**에 가까울수록) 는 온도가 상승함에 따라 판매량이 **감소**한다는 의미입니다 (즉, 두 변수는 반대 방향으로 움직입니다).
+            - A **negative** r (closer to **-1**) means sales **decrease** as temperature rises (i.e., the two variables move in opposite directions).  
+            **음의 상관계수** (r이 **-1**에 가까울수록) 는 온도가 상승함에 따라 판매량이 **감소**한다는 의미입니다 (즉, 두 변수는 반대 방향으로 움직입니다).
             
             - **0** means there's **no linear** relationship between temperature and sales.  
             **0**은 온도와 판매량 간에 **선형적인 관계가 없다**는 의미입니다.
             """)
 
-        with st.expander("📊 Meaningful Range for ρ | 유의미한 범위"):
+        with st.expander("📊 Meaningful Range for r | 유의미한 범위"):
             st.markdown("""
             - **0.1 to 0.3**: Weak positive correlation (약한 양의 상관관계)
             - **0.3 to 0.5**: Moderate positive correlation (중간 정도의 양의 상관관계)
@@ -2956,28 +3060,22 @@ if uploaded_files:
             """)
 
 
+        # 먼저 Alpha Code → Full Name 매핑을 위한 딕셔너리 생성
+        alpha_to_state = dict(zip(state_info["Alpha Code"], state_info["State"]))
+
+        # 상관계수 출력
         for state_code in top_5_states:
             state_data = merged_df[merged_df["LOCATION STATE"] == state_code].copy()
 
+            # Alpha Code → Full Name 변환
+            state_name = alpha_to_state.get(state_code, state_code)
+
             if len(state_data) >= 2:
                 corr, _ = pearsonr(state_data["TOTAL SALES U"], state_data["Avg_Temp_C"])
-                st.markdown(f"**{state_code}** : ρ = `{corr:.2f}`")
+                st.markdown(f"<span style='font-size:200%'>📍 <b>{state_name}</b> : r = <code>{corr:.2f}</code></span>", unsafe_allow_html=True)
             else:
-                st.markdown(f"**{state_code}** : Not enough data")
+                st.markdown(f"<span style='font-size:200%'>📍 <b>{state_name}</b> : Not enough data</span>", unsafe_allow_html=True)
 
-
-    st.markdown("""
-    ---
-    ##### 🌡️ Temperature Data Notes
-
-    - **Source**: Weather data is retrieved in real-time from the [Open-Meteo Archive API](https://open-meteo.com/).
-    - **Coordinates**: Each U.S. state is represented by its capital city's approximate coordinates.
-    - **Missing Data Handling**:
-        1. If a state has missing temperature data for a given month, we use data from a **nearby (adjacent) state** as a fallback.
-        2. If nearby state data is also unavailable, we fill the gap using the **average of the previous and next month** for the same state.
-        3. If those are missing too, we fall back to the **national average** for that month.
-
-    """)
     # ==================================== Export Section ====================================
 
     st.divider()
