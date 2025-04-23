@@ -3064,18 +3064,46 @@ if uploaded_files:
         alpha_to_state = dict(zip(state_info["Alpha Code"], state_info["State"]))
 
         # 상관계수 출력
-        for state_code in top_5_states:
-            state_data = merged_df[merged_df["LOCATION STATE"] == state_code].copy()
+        # Calculate Pearson r for each state
+        correlation_data = []
 
-            # Alpha Code → Full Name 변환
+        for state_code in state_info["Alpha Code"]:
             state_name = alpha_to_state.get(state_code, state_code)
+            state_data = merged_df[merged_df["LOCATION STATE"] == state_code]
 
+            # Correlation only if at least 2 data points
             if len(state_data) >= 2:
                 corr, _ = pearsonr(state_data["TOTAL SALES U"], state_data["Avg_Temp_C"])
-                st.markdown(f"<span style='font-size:200%'>📍 <b>{state_name}</b> : r = <code>{corr:.2f}</code></span>", unsafe_allow_html=True)
             else:
-                st.markdown(f"<span style='font-size:200%'>📍 <b>{state_name}</b> : Not enough data</span>", unsafe_allow_html=True)
+                corr = None
 
+            total_sales = state_data["TOTAL SALES U"].sum()
+            correlation_data.append({
+                "State": state_name,
+                "Alpha Code": state_code,
+                "TOTAL SALES U": total_sales,
+                "Correlation (r)": corr
+            })
+
+        # Create dataframe
+        corr_df = pd.DataFrame(correlation_data)
+
+        # Calculate sales portion
+        national_total = corr_df["TOTAL SALES U"].sum()
+        corr_df["Sales Portion (%)"] = (corr_df["TOTAL SALES U"] / national_total * 100).round(2)
+
+        # Format correlation to two decimals, handle NaN
+        corr_df["Correlation (r)"] = corr_df["Correlation (r)"].apply(lambda x: f"{x:.2f}" if pd.notnull(x) else "Not enough data")
+
+        # Sort by TOTAL SALES U by default
+        corr_df.sort_values(by="TOTAL SALES U", ascending=False, inplace=True)
+
+        # Display
+        st.markdown("### 📈 State-wise Pearson Correlation: Sales vs Avg Temp")
+        st.dataframe(
+            corr_df[["State", "Alpha Code", "TOTAL SALES U", "Sales Portion (%)", "Correlation (r)"]],
+            use_container_width=True
+        )
     # ==================================== Export Section ====================================
 
     st.divider()
