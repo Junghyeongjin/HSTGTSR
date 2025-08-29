@@ -2723,11 +2723,11 @@ if uploaded_files:
                 locationmode="USA-states",
                 color="TOTAL SALES U",
                 color_continuous_scale=[
-                    (0.0, '#001f3f'),
-                    (0.25, '#004080'),
-                    (0.5, '#0074D9'),
-                    (0.75, '#7FDBFF'),
-                    (1.0, '#FFFFFF')
+                    (0.0,'#FFFFFF'),
+                    (0.25,'#7FDBFF'),
+                    (0.5,'#0074D9'),
+                    (0.75,'#004080'),
+                    (1.0, '#001f3f')
                 ],
                 range_color=[lower_bound, upper_bound],
                 scope="usa",
