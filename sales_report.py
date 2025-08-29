@@ -2714,27 +2714,25 @@ if uploaded_files:
             if lower_bound == upper_bound:  # Fallback if range is too narrow
                 lower_bound = data_summary["TOTAL SALES U"].min()
                 upper_bound = data_summary["TOTAL SALES U"].max()
-            # 사용자 정의 색상 스케일 (진한 Navy -> 흰색)
-            navy_white_scale = [
-                [0.0, '#001f3f'],  # 진한 네이비 (Tier 1)
-                [0.25, '#004080'], # 어두운 파랑 (Tier 2)
-                [0.5, '#0074D9'],  # 중간 파랑 (Tier 3)
-                [0.75, '#7FDBFF'], # 연한 하늘색 (Tier 4)
-                [1.0, '#FFFFFF']   # 흰색 (Tier 5)
-            ]
+
 
             # Create the map
             fig = px.choropleth(
                 data_summary,
-                locations="Alpha Code",       # State abbreviations
-                locationmode="USA-states",    # Match to US states
-                color="TOTAL SALES U",        # Use total sales for coloring
-                color_continuous_scale=navy_white_scale,  # Navy -> White scale
-                range_color=[lower_bound, upper_bound],   # Dynamic color range
+                locations="Alpha Code",
+                locationmode="USA-states",
+                color="TOTAL SALES U",
+                color_continuous_scale=[
+                    (0.0, '#001f3f'),
+                    (0.25, '#004080'),
+                    (0.5, '#0074D9'),
+                    (0.75, '#7FDBFF'),
+                    (1.0, '#FFFFFF')
+                ],
+                range_color=[lower_bound, upper_bound],
                 scope="usa",
                 labels={"TOTAL SALES U": "Total Sales Units"}
             )
-
 
             # Customize the map layout
             fig.update_layout(
